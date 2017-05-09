@@ -23,9 +23,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
+	//"github.com/drone/routes"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
-	"encoding/gob"
+	//"encoding/gob"
+	//"crypto/rand"
 )
 
 // SimpleChaincode example simple Chaincode implementation
@@ -137,6 +138,9 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function stri
 		// return res, err
 	} else if function == "remove_trade" { //cancel an open trade order
 		// return t.remove_trade(stub, args)
+	}else if function == "updateCustomer"{
+		res,err := t.update_customer(stub,args)
+		return  res ,err
 	}
 	fmt.Println("invoke did not find func: " + function) //error
 
@@ -205,31 +209,83 @@ func (t *SimpleChaincode) Write(stub shim.ChaincodeStubInterface, args []string)
 // =================================================================================================================
 func (t *SimpleChaincode)  update_customer(stub shim.ChaincodeStubInterface, args []string) ([]byte, error){
 	var err error
+	// query check name
+	name := args[0]
+	telno := strings.ToLower(args[1])
+	age, err := strconv.Atoi(args[2])
+	occupation := strings.ToLower(args[3])
+	if err != nil {
+		return nil, errors.New("3rd argument must be a numeric string")
+	}
+	valAsBytes,err := stub.GetState(name)
+	if err != nil {
+		return  errors.New("Fiail get name from json")
+	}
+	res := Customer{}
 
-	if len(args) != 4 {
-		return  nil, errors.New("Incorrect number of argument request 4")
+	json.Unmarshal(valAsBytes,&res)
+	if  res.Name == name {
+		if len(args) != 4 {
+			return  nil, errors.New("Incorrect number of argument request 4")
+		}
+		//update argument
+		fmt.Println("=== start init customer ===")
+		if len(args[0]) <= 0 {
+			return  nil, errors.New("the Name Parameter wrong")
+		}
+		if len(args[1]) <= 0{
+			return  nil, errors.New("the Telno Parameter wrong")
+		}
+		if len(args[2]) <= 0 {
+			return  nil, errors.New("the Age Parameter wrong")
+		}
+		if len(args[3]) <= 0 {
+			return  nil, errors.New("the occupation")
+		}
+
+
+		res.Name = name
+		res.TelNo = telno
+		res.Age = age
+		res.Occupation = occupation
+		str, err := json.Marshal(res)
+		err = stub.PutState(name,str)
+		if err != nil {
+			return nil,errors.New("can't put into block ")
+		}
+		customerAsbytes, err :=  stub.GetState(customerIndexStr)
+		if err != nil {
+			return  errors.New("Get index Failed ")
+		}
+		//var putJson map[string]interface{}
+		var customerIndex []string
+		json.Unmarshal(customerAsbytes,&customerIndex)
+		//add and update index
+		for i := 0 ;i< len(customerIndex);i++ {
+			if customerIndex[i] == name{
+				customerIndex[i] = name
+				fmt.Println("update index complete ")
+
+			}
+		}
+		jsonAsBytes, _ := json.Marshal(customerIndex)
+		err = stub.PutState(customerIndexStr, jsonAsBytes) //store name of customer
+		fmt.Println("- end update customer complete")
+		return  nil,nil
+	} else {
+		return  nil, errors.New("Name not found")
 	}
 
-	//update argument
-	fmt.Println("=== start init customer ===")
-	if len(args[0]) <= 0 {
-		return  nil, errors.New("the Name Parameter wrong")
-	}
-	if len(args[1]) <= 0{
-		return  nil, errors.New("the Telno Parameter wrong")
-	}
-	if len(args[2]) <= 0 {
-		return  nil, errors.New("the Age Parameter wrong")
-	}
-	if len(args[3]) <= 0 {
-		return  nil, errors.New("the occupation")
-	}
+
+
+
 }
 // ============================================================================================================================
 // Init Customer - create a new customer, store into chaincode state
 // ============================================================================================================================
 func (t *SimpleChaincode) new_customer(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
 	var err error
+
 
 	//   0       1       2     3
 	// "asdf", "blue", "35", "bob"
